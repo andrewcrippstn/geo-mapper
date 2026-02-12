@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoMapper - Interactive Map Visualization</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', -apple-system, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #E2E8F0;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #0066FF;
+            box-shadow: 0 0 12px #0066FF;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+
+        .status-badge {
+            padding: 6px 14px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 6px;
+            color: #22C55E;
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        #controlPanel {
+            position: absolute;
+            top: 90px;
+            left: 24px;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 24px;
+            width: 360px;
+            max-height: calc(100vh - 140px);
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .control-section {
+            margin-bottom: 24px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #94A3B8;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .paste-area {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            color: #E2E8F0;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            transition: all 0.2s;
+        }
+
+        .paste-area:focus {
+            outline: none;
+            border-color: #3B82F6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .paste-area::placeholder {
+            color: #64748B;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 6px;
+            color: #E2E8F0;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #3B82F6;
+        }
+
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .icon-btn {
+            padding: 12px;
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 6px;
+            color: #E2E8F0;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .icon-btn.active {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #3B82F6;
+        }
+
+        .icon-btn:hover {
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .color-btn {
+            width: 100%;
+            height: 40px;
+            border: 3px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .color-btn.active {
+            border-color: #fff;
+            box-shadow: 0 0 16px currentColor;
+        }
+
+        .map-type-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .map-type-btn {
+            padding: 12px 16px;
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 6px;
+            color: #E2E8F0;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .map-type-btn.active {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #3B82F6;
+        }
+
+        .map-type-btn:hover {
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+            background: #1e293b;
+        }
+
+        .instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #94A3B8;
+            z-index: 999;
+            pointer-events: none;
+        }
+
+        .instructions-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .instructions-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .instructions-text {
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        .custom-marker {
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+            transition: transform 0.2s;
+        }
+
+        .custom-marker:hover {
+            transform: scale(1.15);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 130, 246, 0.5);
+        }
+
+        .marker-label {
+            pointer-events: none;
+            z-index: 500;
+        }
+
+        .hint-text {
+            font-size: 11px;
+            color: #64748B;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div id="header">
+        <div class="logo">
+            <div class="pulse-dot"></div>
+            <h1>GeoMapper</h1>
+        </div>
+        <div style="flex: 1;"></div>
+        <div id="statusBadge"></div>
+    </div>
+
+    <!-- Control Panel -->
+    <div id="controlPanel">
+        <!-- Data Input -->
+        <div class="control-section">
+            <label class="label">Paste Data from Excel</label>
+            <textarea 
+                id="dataInput" 
+                class="paste-area" 
+                placeholder="Paste your data here (copy from Excel, CSV, or tab-separated)...
+
+Example:
+City,Latitude,Longitude,Population
+New York,40.7128,-74.0060,8336817
+Los Angeles,34.0522,-118.2437,3979576"
+            ></textarea>
+            <div class="hint-text">
+                💡 Tip: Select cells in Excel and paste here. Include column headers!
+            </div>
+            <button id="parseBtn" class="btn-primary" style="margin-top: 12px;">
+                Load Data
+            </button>
+        </div>
+
+        <!-- Dynamic controls will be added here -->
+        <div id="dynamicControls"></div>
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+
+    <!-- Instructions Overlay -->
+    <div id="instructions" class="instructions">
+        <div class="instructions-icon">🗺️</div>
+        <div class="instructions-title">Paste Data to Begin</div>
+        <div class="instructions-text">Copy data from Excel and paste above</div>
+    </div>
+
+    <script>
+        // Configuration
+        const ICON_SETS = {
+            'Classic Pin': (color) => `
+                <svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 0C7.163 0 0 7.163 0 16c0 12 16 26 16 26s16-14 16-26c0-8.837-7.163-16-16-16z" 
+                          fill="${color}" stroke="#fff" stroke-width="2"/>
+                    <circle cx="16" cy="16" r="6" fill="#fff"/>
+                </svg>
+            `,
+            'Circle': (color) => `
+                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" fill="${color}" stroke="#fff" stroke-width="2.5"/>
+                    <circle cx="12" cy="12" r="4" fill="#fff"/>
+                </svg>
+            `,
+            'Diamond': (color) => `
+                <svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="14" y="0" width="16" height="16" transform="rotate(45 14 14)" 
+                          fill="${color}" stroke="#fff" stroke-width="2"/>
+                    <circle cx="14" cy="14" r="4" fill="#fff"/>
+                </svg>
+            `,
+            'Star': (color) => `
+                <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M15 2l3.09 9.51h10l-8.09 5.88 3.09 9.51L15 21.02 6.91 26.9l3.09-9.51L1.91 11.51h10z" 
+                          fill="${color}" stroke="#fff" stroke-width="1.5"/>
+                    <circle cx="15" cy="15" r="3" fill="#fff"/>
+                </svg>
+            `,
+            'Square': (color) => `
+                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="2" width="20" height="20" rx="2" 
+                          fill="${color}" stroke="#fff" stroke-width="2.5"/>
+                    <rect x="8" y="8" width="8" height="8" rx="1" fill="#fff"/>
+                </svg>
+            `
+        };
+
+        const MAP_TYPES = [
+            // Standard Maps
+            { name: 'Street Map', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', 
+              attribution: '© OpenStreetMap' },
+            { name: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+              attribution: '© Esri' },
+            { name: 'Topo Map', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+              attribution: '© OpenTopoMap' },
+            
+            // Minimal/Clean Maps
+            { name: 'Light (Minimal)', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+              attribution: '© CARTO' },
+            { name: 'Voyager', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+              attribution: '© CARTO' },
+            { name: 'Positron (No Labels)', url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+              attribution: '© CARTO' },
+            
+            // Dark Maps
+            { name: 'Dark Mode', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+              attribution: '© CARTO' },
+            { name: 'Dark (No Labels)', url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+              attribution: '© CARTO' },
+            
+            // Black & White / Grayscale
+            { name: 'Toner (High Contrast)', url: 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png',
+              attribution: '© Stamen Design' },
+            { name: 'Toner Lite', url: 'https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}{r}.png',
+              attribution: '© Stamen Design' },
+            { name: 'Black & White', url: 'https://tiles.stadiamaps.com/tiles/stamen_toner_background/{z}/{x}/{y}{r}.png',
+              attribution: '© Stamen Design' },
+            
+            // Artistic Maps
+            { name: 'Watercolor', url: 'https://watercolormaps.collection.cooperhewitt.org/tile/watercolor/{z}/{x}/{y}.jpg',
+              attribution: '© Stamen Design' },
+            { name: 'Terrain', url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+              attribution: '© OpenStreetMap' }
+        ];
+
+        const MARKER_COLORS = [
+            { name: 'Electric Blue', value: '#0066FF' },
+            { name: 'Sunset Orange', value: '#FF6B35' },
+            { name: 'Emerald', value: '#00D9A3' },
+            { name: 'Royal Purple', value: '#8B5CF6' },
+            { name: 'Crimson', value: '#DC2626' },
+            { name: 'Golden', value: '#F59E0B' },
+            { name: 'Cyan', value: '#06B6D4' },
+            { name: 'Magenta', value: '#EC4899' }
+        ];
+
+        // Icon anchor points for each icon type
+        const ICON_ANCHORS = {
+            'Classic Pin': { iconSize: [32, 42], iconAnchor: [16, 42], popupAnchor: [0, -42] },
+            'Circle': { iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12] },
+            'Diamond': { iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14] },
+            'Star': { iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15] },
+            'Square': { iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12] }
+        };
+
+        // State
+        let map = null;
+        let tileLayer = null;
+        let markers = [];
+        let csvData = null;
+        let headers = [];
+        let labelField = '';
+        let mapType = 0;
+        let iconType = 'Classic Pin';
+        let markerColor = '#0066FF';
+        let showLabels = false;
+        let colorGroupField = '';
+        let colorGroups = {};
+
+        // Generate color groups based on unique values in a field
+        function generateColorGroups(field) {
+            if (!field || !csvData) {
+                colorGroups = {};
+                return;
+            }
+
+            const uniqueValues = [...new Set(csvData.map(row => row[field]))].filter(v => v);
+            colorGroups = {};
+            
+            uniqueValues.forEach((value, index) => {
+                colorGroups[value] = MARKER_COLORS[index % MARKER_COLORS.length].value;
+            });
+        }
+
+        // Get color for a specific value, fallback to default color
+        function getColorForValue(field, value) {
+            if (!field || !colorGroups[value]) {
+                return markerColor;
+            }
+            return colorGroups[value];
+        }
+
+        // Initialize map
+        function initMap() {
+            if (map) return;
+            
+            map = L.map('map').setView([20, 0], 2);
+            tileLayer = L.tileLayer(MAP_TYPES[mapType].url, {
+                attribution: MAP_TYPES[mapType].attribution,
+                maxZoom: 18
+            }).addTo(map);
+        }
+
+        // Parse data (handles CSV, TSV, or Excel paste)
+        function parseData(text) {
+            const lines = text.trim().split('\n');
+            if (lines.length < 2) return null;
+
+            // Detect delimiter (tab for Excel, comma for CSV)
+            const firstLine = lines[0];
+            const delimiter = firstLine.includes('\t') ? '\t' : ',';
+
+            const headers = firstLine.split(delimiter).map(h => h.trim());
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(delimiter).map(v => v.trim());
+                if (values.length === headers.length) {
+                    const row = {};
+                    headers.forEach((header, j) => {
+                        row[header] = values[j];
+                    });
+                    data.push(row);
+                }
+            }
+
+            return { headers, data };
+        }
+
+        // Update map tiles
+        function updateMapTiles() {
+            if (!map || !tileLayer) return;
+            
+            map.removeLayer(tileLayer);
+            tileLayer = L.tileLayer(MAP_TYPES[mapType].url, {
+                attribution: MAP_TYPES[mapType].attribution,
+                maxZoom: 18
+            }).addTo(map);
+        }
+
+        // Update markers
+        function updateMarkers() {
+            if (!map || !csvData) return;
+
+            // Clear existing markers
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            // Find lat/lon columns
+            const latCol = headers.find(h => 
+                h.toLowerCase().includes('lat') && !h.toLowerCase().includes('lon')
+            );
+            const lonCol = headers.find(h => 
+                h.toLowerCase().includes('lon') || h.toLowerCase().includes('lng')
+            );
+
+            if (!latCol || !lonCol) {
+                alert('Could not find latitude/longitude columns. Please ensure your data has columns with "lat" and "lon" in the names.');
+                return;
+            }
+
+            const bounds = [];
+
+            csvData.forEach(row => {
+                const lat = parseFloat(row[latCol]);
+                const lon = parseFloat(row[lonCol]);
+
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    bounds.push([lat, lon]);
+
+                    // Determine marker color (from group or default)
+                    const currentColor = colorGroupField ? getColorForValue(colorGroupField, row[colorGroupField]) : markerColor;
+
+                    // Create custom icon
+                    const iconSvg = ICON_SETS[iconType](currentColor);
+                    const anchorConfig = ICON_ANCHORS[iconType];
+                    const customIcon = L.divIcon({
+                        html: iconSvg,
+                        className: 'custom-marker',
+                        iconSize: anchorConfig.iconSize,
+                        iconAnchor: anchorConfig.iconAnchor,
+                        popupAnchor: anchorConfig.popupAnchor
+                    });
+
+                    const marker = L.marker([lat, lon], { icon: customIcon }).addTo(map);
+
+                    // Add permanent label if enabled
+                    if (showLabels && labelField && row[labelField]) {
+                        const labelIcon = L.divIcon({
+                            html: `<div style="
+                                background: rgba(15, 23, 42, 0.9);
+                                color: white;
+                                padding: 4px 8px;
+                                border-radius: 4px;
+                                font-size: 11px;
+                                font-weight: 600;
+                                white-space: nowrap;
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                                border: 1px solid ${currentColor};
+                                font-family: 'Space Grotesk', sans-serif;
+                            ">${row[labelField]}</div>`,
+                            className: 'marker-label',
+                            iconSize: null,
+                            iconAnchor: [-20, anchorConfig.iconSize[1] / 2]
+                        });
+                        L.marker([lat, lon], { icon: labelIcon, interactive: false }).addTo(map);
+                    }
+
+                    // Create popup content
+                    let popupContent = `<div style="font-family: 'Space Grotesk', sans-serif; min-width: 150px;">`;
+                    if (labelField && row[labelField]) {
+                        popupContent += `<strong style="font-size: 14px; color: ${currentColor};">${row[labelField]}</strong><br/>`;
+                    }
+                    headers.forEach(header => {
+                        if (header !== latCol && header !== lonCol && row[header]) {
+                            popupContent += `<span style="font-size: 12px;"><strong>${header}:</strong> ${row[header]}</span><br/>`;
+                        }
+                    });
+                    popupContent += `</div>`;
+
+                    marker.bindPopup(popupContent);
+                    markers.push(marker);
+                }
+            });
+
+            // Fit bounds if we have markers
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+            // Update status
+            updateStatus();
+        }
+
+        // Update status badge
+        function updateStatus() {
+            const badge = document.getElementById('statusBadge');
+            if (csvData && csvData.length > 0) {
+                badge.innerHTML = `<div class="status-badge">${csvData.length} points loaded</div>`;
+            } else {
+                badge.innerHTML = '';
+            }
+        }
+
+        // Render dynamic controls
+        function renderControls() {
+            const container = document.getElementById('dynamicControls');
+            
+            let html = `
+                <!-- Label Field -->
+                <div class="control-section">
+                    <label class="label">Point Label</label>
+                    <select id="labelSelect">
+                        ${headers.map(h => `<option value="${h}">${h}</option>`).join('')}
+                    </select>
+                    <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="showLabelsToggle" ${showLabels ? 'checked' : ''} 
+                               style="width: 16px; height: 16px; cursor: pointer;">
+                        <label for="showLabelsToggle" style="font-size: 12px; color: #94A3B8; cursor: pointer; margin: 0;">
+                            Show labels on map
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Color Grouping -->
+                <div class="control-section">
+                    <label class="label">Color by Category</label>
+                    <select id="colorGroupSelect">
+                        <option value="">None (use single color)</option>
+                        ${headers.map(h => `<option value="${h}" ${h === colorGroupField ? 'selected' : ''}>${h}</option>`).join('')}
+                    </select>
+                    ${colorGroupField ? `
+                        <div style="margin-top: 12px; padding: 12px; background: rgba(30, 41, 59, 0.3); border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                            <div style="font-size: 11px; color: #94A3B8; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Legend</div>
+                            ${Object.entries(colorGroups).map(([value, color]) => `
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <div style="width: 16px; height: 16px; background: ${color}; border-radius: 3px; border: 2px solid #fff;"></div>
+                                    <span style="font-size: 12px; color: #E2E8F0;">${value}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+
+                ${!colorGroupField ? `
+                <!-- Single Marker Color (only shown when not grouping) -->
+                <div class="control-section">
+                    <label class="label">Marker Color</label>
+                    <div class="color-grid" id="colorGrid">
+                        ${MARKER_COLORS.map(color => `
+                            <button class="color-btn ${color.value === markerColor ? 'active' : ''}" 
+                                    style="background: ${color.value};" 
+                                    data-color="${color.value}"
+                                    title="${color.name}">
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+
+                <!-- Icon Type -->
+                <div class="control-section">
+                    <label class="label">Marker Style</label>
+                    <div class="icon-grid" id="iconGrid">
+                        ${Object.keys(ICON_SETS).map(icon => `
+                            <button class="icon-btn ${icon === iconType ? 'active' : ''}" data-icon="${icon}">
+                                ${icon}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Map Type -->
+                <div class="control-section">
+                    <label class="label">Map Style</label>
+                    <div class="map-type-list" id="mapTypeList">
+                        ${MAP_TYPES.map((m, i) => `
+                            <button class="map-type-btn ${i === mapType ? 'active' : ''}" data-index="${i}">
+                                ${m.name}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+
+            // Add event listeners
+            document.getElementById('labelSelect').addEventListener('change', (e) => {
+                labelField = e.target.value;
+                updateMarkers();
+            });
+
+            document.getElementById('showLabelsToggle').addEventListener('change', (e) => {
+                showLabels = e.target.checked;
+                updateMarkers();
+            });
+
+            document.getElementById('colorGroupSelect').addEventListener('change', (e) => {
+                colorGroupField = e.target.value;
+                if (colorGroupField) {
+                    generateColorGroups(colorGroupField);
+                }
+                renderControls(); // Re-render to show/hide legend and color picker
+                updateMarkers();
+            });
+
+            document.querySelectorAll('.icon-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    iconType = e.target.dataset.icon;
+                    document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    updateMarkers();
+                });
+            });
+
+            if (!colorGroupField) {
+                document.querySelectorAll('.color-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        markerColor = e.target.dataset.color;
+                        document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        updateMarkers();
+                    });
+                });
+            }
+
+            document.querySelectorAll('.map-type-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    mapType = parseInt(e.target.dataset.index);
+                    document.querySelectorAll('.map-type-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    updateMapTiles();
+                });
+            });
+        }
+
+        // Parse button click handler
+        document.getElementById('parseBtn').addEventListener('click', () => {
+            const input = document.getElementById('dataInput').value;
+            if (!input.trim()) {
+                alert('Please paste some data first!');
+                return;
+            }
+
+            const result = parseData(input);
+            if (!result || result.data.length === 0) {
+                alert('Could not parse data. Please check the format.');
+                return;
+            }
+
+            csvData = result.data;
+            headers = result.headers;
+            labelField = headers[0];
+
+            // Hide instructions
+            document.getElementById('instructions').style.display = 'none';
+
+            // Render controls
+            renderControls();
+
+            // Update markers
+            updateMarkers();
+        });
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            initMap();
+        });
+    </script>
+</body>
+</html>
