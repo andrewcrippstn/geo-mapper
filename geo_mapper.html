@@ -11,7 +11,6 @@
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:'Space Grotesk',sans-serif; background:#0f172a; color:#E2E8F0; overflow:hidden; height:100vh; }
 
-        /* Header */
         #header {
             position:absolute; top:0; left:0; right:0; z-index:1100;
             background:rgba(13,18,36,0.97); backdrop-filter:blur(20px);
@@ -24,7 +23,6 @@
         h1 { font-size:22px;font-weight:700;background:linear-gradient(135deg,#60A5FA,#2563EB);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
         .status-badge { padding:5px 12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;color:#22C55E;font-weight:500;font-size:12px; }
 
-        /* Panel */
         #controlPanel {
             position:absolute; top:70px; left:24px; z-index:1050;
             background:rgba(11,17,32,0.97); backdrop-filter:blur(20px);
@@ -62,17 +60,13 @@
         ::-webkit-scrollbar-track { background:rgba(30,41,59,.3); }
         ::-webkit-scrollbar-thumb { background:rgba(59,130,246,.3);border-radius:3px; }
 
-        /* Map */
         #map { width:100%;height:100vh; }
         .custom-marker { filter:drop-shadow(0 3px 6px rgba(0,0,0,.4)); }
         .marker-label { pointer-events:none;z-index:500; }
 
-        /* ── Floating Legend ── */
         #floatingLegend {
             position:absolute; bottom:36px; right:24px; z-index:1080;
-            background:#4B5563;
-            border:none;
-            border-radius:4px;
+            background:#4B5563; border:none; border-radius:4px;
             padding:10px 13px; min-width:140px; max-width:210px;
             box-shadow:0 4px 16px rgba(0,0,0,.5);
             display:none; cursor:move; user-select:none;
@@ -90,6 +84,7 @@
             cursor:move;
             box-shadow:0 0 0 2px rgba(0,0,0,.5);
             z-index:900;
+            /* pointer-events must remain on so drag still works */
         }
         .rh {
             position:absolute; width:11px; height:11px;
@@ -106,19 +101,15 @@
         /* ── Loupe Window ── */
         #loupeWin {
             position:absolute; z-index:1065; display:none;
-            width:380px; height:300px; right:24px; top:80px;
-            border:none;
-            border-radius:4px;
-            overflow:hidden;
+            width:380px; height:285px; right:24px; top:80px;
+            border:none; border-radius:4px; overflow:hidden;
             box-shadow:0 8px 32px rgba(0,0,0,.7);
-            background:#374151;
-            cursor:move;
+            background:#374151; cursor:move;
         }
         #loupeMapEl { width:100%; height:100%; }
         #loupeBar { display:none; }
         #loupeCls { display:none; }
 
-        /* Instructions */
         #inst { position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#94A3B8;z-index:50;pointer-events:none; }
         .inst-icon { font-size:52px;margin-bottom:12px;opacity:.2; }
         .inst-t { font-size:17px;font-weight:600;margin-bottom:5px; }
@@ -150,7 +141,6 @@ London	51.5074	-0.1278	Capital"></textarea>
 
 <div id="map"></div>
 
-<!-- Selection box overlaid on map -->
 <div id="selBox">
     <div class="rh rh-nw" data-d="nw"></div><div class="rh rh-ne" data-d="ne"></div>
     <div class="rh rh-sw" data-d="sw"></div><div class="rh rh-se" data-d="se"></div>
@@ -158,13 +148,11 @@ London	51.5074	-0.1278	Capital"></textarea>
     <div class="rh rh-w"  data-d="w"></div> <div class="rh rh-e"  data-d="e"></div>
 </div>
 
-<!-- Floating close-up window -->
 <div id="loupeWin">
     <div id="loupeBar"><span>🔍 Close-up</span><button id="loupeCls">✕</button></div>
     <div id="loupeMapEl"></div>
 </div>
 
-<!-- Floating legend -->
 <div id="floatingLegend">
     <div class="leg-title" id="legTitle">Legend</div>
     <div id="legItems"></div>
@@ -242,6 +230,13 @@ let labelField='', mapIdx=0, iconType='Classic Pin', markerColor='#0066FF';
 let showLabels=false, groupField='', colorGroups={};
 let loupeOn=false;
 
+// Selection box state — pixel coords relative to map container
+let SX=160, SY=120, SW=200, SH=150;
+// Geo-anchor: the lat/lng of the NW and SE corners of the selection box.
+// Updated whenever the user finishes dragging/resizing, and used to
+// reproject the box when the map pans or zooms.
+let selNW=null, selSE=null; // L.LatLng
+
 // ══════════════════════════════════════
 // PARSE
 // ══════════════════════════════════════
@@ -282,7 +277,6 @@ function updateLegend(){
     el.style.display='block';
 }
 
-// Make legend draggable
 ;(function(){
     const el=document.getElementById('floatingLegend');
     let dr=false,ox=0,oy=0;
@@ -297,13 +291,24 @@ function updateLegend(){
 function initMap(){
     map=L.map('map',{center:[20,0],zoom:2});
     tile=L.tileLayer(ALL_MAPS[mapIdx].url,{attribution:ALL_MAPS[mapIdx].attr,maxZoom:18}).addTo(map);
-    map.on('moveend zoomend',()=>{ if(loupeOn)syncLoupe(); });
+
+    // Whenever the map moves or zooms, reproject the selection box from its
+    // saved geo-anchor so it stays glued to the same geographic region.
+    map.on('move zoom', () => {
+        if(loupeOn && selNW && selSE) {
+            geoToBox();
+            applyBox();
+            syncLoupe();
+        }
+    });
 }
+
 function initLoupeMap(){
     if(loupeMap)return;
     loupeMap=L.map('loupeMapEl',{center:[20,0],zoom:5,zoomControl:false,attributionControl:false});
     loupeTile=L.tileLayer(ALL_MAPS[mapIdx].url,{maxZoom:18}).addTo(loupeMap);
 }
+
 function updateTiles(){
     [map,loupeMap].forEach((m,i)=>{
         if(!m)return;
@@ -311,6 +316,28 @@ function updateTiles(){
         const nl=L.tileLayer(ALL_MAPS[mapIdx].url,{attribution:ALL_MAPS[mapIdx].attr,maxZoom:18}).addTo(m);
         if(i===0)tile=nl; else loupeTile=nl;
     });
+}
+
+// ══════════════════════════════════════
+// GEO-ANCHOR HELPERS
+// ══════════════════════════════════════
+
+/** Save current pixel box as geographic lat/lng corners. */
+function boxToGeo(){
+    if(!map)return;
+    selNW = map.containerPointToLatLng(L.point(SX,      SY));
+    selSE = map.containerPointToLatLng(L.point(SX+SW, SY+SH));
+}
+
+/** Reproject saved lat/lng corners back to current pixel coords. */
+function geoToBox(){
+    if(!map||!selNW||!selSE)return;
+    const nwPt = map.latLngToContainerPoint(selNW);
+    const sePt = map.latLngToContainerPoint(selSE);
+    SX = nwPt.x;
+    SY = nwPt.y;
+    SW = sePt.x - nwPt.x;
+    SH = sePt.y - nwPt.y;
 }
 
 // ══════════════════════════════════════
@@ -344,7 +371,6 @@ function populateMap(target,outList,withPopups){
     const {lat:latC,lon:lonC}=findLatLon();
     if(!latC||!lonC)return[];
     const bounds=[];
-    const isLoupe = (target === loupeMap);
     csvData.forEach(row=>{
         const lat=parseFloat(row[latC]),lon=parseFloat(row[lonC]);
         if(isNaN(lat)||isNaN(lon))return;
@@ -353,9 +379,7 @@ function populateMap(target,outList,withPopups){
         const mk=L.marker([lat,lon],{icon:makeIcon(row)}).addTo(target);
         if(withPopups) mk.bindPopup(makePopup(row,latC,lonC,color));
         outList.push(mk);
-        // Both main map and loupe respect the showLabels toggle
-        const doLabel = showLabels && labelField && row[labelField];
-        if(doLabel){
+        if(showLabels && labelField && row[labelField]){
             const a=ANCHORS[iconType];
             const lm=L.marker([lat,lon],{icon:makeLabel(row[labelField],color,a.iconSize[1]/2),interactive:false}).addTo(target);
             outList.push(lm);
@@ -379,23 +403,62 @@ function updateMarkers(){
 // LOUPE
 // ══════════════════════════════════════
 const selBox=document.getElementById('selBox');
-let SX=160,SY=120,SW=200,SH=150; // box pos/size in map px
 let sDrag=false,sResize=false,sDir=null,sMx=0,sMy=0,s0X=0,s0Y=0,s0W=0,s0H=0;
 
+/**
+ * Apply SX/SY/SW/SH to the DOM selection box (no hard minimum —
+ * just clamp to the map container so the box never goes off-screen).
+ * Also resizes the loupe window to maintain the same aspect ratio.
+ */
 function applyBox(){
-    const r=document.getElementById('map').getBoundingClientRect();
-    SW=Math.max(80,Math.min(SW,r.width-SX));
-    SH=Math.max(60,Math.min(SH,r.height-SY));
-    SX=Math.max(0,Math.min(SX,r.width-SW));
-    SY=Math.max(0,Math.min(SY,r.height-SH));
-    selBox.style.cssText+=`;left:${SX}px;top:${SY}px;width:${SW}px;height:${SH}px;`;
+    const r = document.getElementById('map').getBoundingClientRect();
+    // No minimum size — clamp only to keep the box inside the map viewport.
+    // Allow the box to go negative on right/bottom only if it came from
+    // geoToBox() during heavy zoom-out; the user can still interact with it.
+    SW = Math.max(4, SW);
+    SH = Math.max(4, SH);
+    SX = Math.max(0, Math.min(SX, r.width  - 4));
+    SY = Math.max(0, Math.min(SY, r.height - 4));
+
+    selBox.style.left   = SX + 'px';
+    selBox.style.top    = SY + 'px';
+    selBox.style.width  = SW + 'px';
+    selBox.style.height = SH + 'px';
+
+    // Keep loupe window aspect ratio in sync with the selection box.
+    if(loupeOn) updateLoupeAspect();
+}
+
+/**
+ * Resize the loupe window so its aspect ratio matches SW:SH.
+ * We keep the width fixed and adjust height, capped at 70 % of viewport.
+ */
+function updateLoupeAspect(){
+    const lw = document.getElementById('loupeWin');
+    const loupeW = lw.offsetWidth || 380;
+    const ratio  = SH / SW;
+    const maxH   = Math.round(window.innerHeight * 0.70);
+    const newH   = Math.min(maxH, Math.round(loupeW * ratio));
+    lw.style.height = newH + 'px';
+    if(loupeMap) loupeMap.invalidateSize();
 }
 
 function syncLoupe(){
     if(!loupeMap||!loupeOn)return;
-    const tl=map.containerPointToLatLng([SX,SY]);
-    const br=map.containerPointToLatLng([SX+SW,SY+SH]);
-    loupeMap.fitBounds(L.latLngBounds(br,tl),{animate:false});
+
+    // Centre of the selection box in lat/lng.
+    const center = map.containerPointToLatLng([SX + SW/2, SY + SH/2]);
+
+    // Zoom delta so the selection-box region fills the loupe window exactly.
+    const lw   = document.getElementById('loupeWin');
+    const loupeW = lw.offsetWidth  || 380;
+    const loupeH = lw.offsetHeight || 285;
+    const deltaX = Math.log2(loupeW / Math.max(1, SW));
+    const deltaY = Math.log2(loupeH / Math.max(1, SH));
+    // Use min so the full selection is always visible (contain mode).
+    const zoom   = map.getZoom() + Math.min(deltaX, deltaY);
+
+    loupeMap.setView(center, zoom, {animate:false});
 }
 
 function enableLoupe(){
@@ -403,16 +466,21 @@ function enableLoupe(){
     initLoupeMap();
     clearMarkers(loupeMap,loupeMarkers);
     populateMap(loupeMap,loupeMarkers,false);
+
     const r=document.getElementById('map').getBoundingClientRect();
-    SX=Math.round(r.width*.38);SY=Math.round(r.height*.28);SW=200;SH=150;
+    SX=Math.round(r.width*.38); SY=Math.round(r.height*.28); SW=200; SH=150;
     selBox.style.display='block';
     applyBox();
+    boxToGeo(); // anchor the initial position geographically
+
     const lw=document.getElementById('loupeWin');
     lw.style.cssText='display:block;right:24px;top:80px;bottom:auto;left:auto;';
-    setTimeout(()=>{loupeMap.invalidateSize();syncLoupe();},60);
+    setTimeout(()=>{loupeMap.invalidateSize();updateLoupeAspect();syncLoupe();},60);
 }
+
 function disableLoupe(){
     loupeOn=false;
+    selNW=null; selSE=null;
     selBox.style.display='none';
     document.getElementById('loupeWin').style.display='none';
     if(loupeMap)clearMarkers(loupeMap,loupeMarkers);
@@ -420,46 +488,59 @@ function disableLoupe(){
     if(cb)cb.checked=false;
 }
 
-// Box drag
+// ── Selection box drag ──
 selBox.addEventListener('mousedown',e=>{
     if(e.target.classList.contains('rh'))return;
     e.preventDefault();e.stopPropagation();
     map.dragging.disable();
     sDrag=true;sMx=e.clientX;sMy=e.clientY;s0X=SX;s0Y=SY;
 });
+
 selBox.querySelectorAll('.rh').forEach(h=>h.addEventListener('mousedown',e=>{
     e.preventDefault();e.stopPropagation();
     map.dragging.disable();
     sResize=true;sDir=e.target.dataset.d;
     sMx=e.clientX;sMy=e.clientY;s0X=SX;s0Y=SY;s0W=SW;s0H=SH;
 }));
+
 document.addEventListener('mousemove',e=>{
     if(!sDrag&&!sResize)return;
-    const dx=e.clientX-sMx,dy=e.clientY-sMy;
-    if(sDrag){SX=s0X+dx;SY=s0Y+dy;}
-    else{
+    const dx=e.clientX-sMx, dy=e.clientY-sMy;
+    if(sDrag){
+        SX=s0X+dx; SY=s0Y+dy;
+    } else {
         const d=sDir;
-        if(d.includes('e'))SW=Math.max(80,s0W+dx);
-        if(d.includes('s'))SH=Math.max(60,s0H+dy);
-        if(d.includes('w')){SX=s0X+dx;SW=Math.max(80,s0W-dx);}
-        if(d.includes('n')){SY=s0Y+dy;SH=Math.max(60,s0H-dy);}
+        if(d.includes('e')) SW=Math.max(4,s0W+dx);
+        if(d.includes('s')) SH=Math.max(4,s0H+dy);
+        if(d.includes('w')){ SX=s0X+dx; SW=Math.max(4,s0W-dx); }
+        if(d.includes('n')){ SY=s0Y+dy; SH=Math.max(4,s0H-dy); }
     }
-    applyBox();syncLoupe();
-});
-document.addEventListener('mouseup',()=>{
-    if(sDrag||sResize){sDrag=false;sResize=false;map.dragging.enable();}
+    applyBox();
+    syncLoupe();
 });
 
-// Loupe window drag
+document.addEventListener('mouseup',()=>{
+    if(sDrag||sResize){
+        sDrag=false; sResize=false;
+        map.dragging.enable();
+        boxToGeo(); // re-anchor after every user interaction
+    }
+});
+
+// ── Loupe window drag ──
 ;(function(){
     const lw=document.getElementById('loupeWin');
     let dr=false,ox=0,oy=0;
     lw.addEventListener('mousedown',e=>{
-        // Only drag if not interacting with the map itself
         if(e.target.closest('.leaflet-interactive')||e.target.closest('.leaflet-control'))return;
         const r=lw.getBoundingClientRect();dr=true;ox=e.clientX-r.left;oy=e.clientY-r.top;e.preventDefault();
     });
-    document.addEventListener('mousemove',e=>{if(!dr)return;lw.style.right='auto';lw.style.bottom='auto';lw.style.left=(e.clientX-ox)+'px';lw.style.top=(e.clientY-oy)+'px';if(loupeMap)loupeMap.invalidateSize();});
+    document.addEventListener('mousemove',e=>{
+        if(!dr)return;
+        lw.style.right='auto';lw.style.bottom='auto';
+        lw.style.left=(e.clientX-ox)+'px';lw.style.top=(e.clientY-oy)+'px';
+        if(loupeMap)loupeMap.invalidateSize();
+    });
     document.addEventListener('mouseup',()=>dr=false);
 })();
 document.getElementById('loupeCls').addEventListener('click',disableLoupe);
